@@ -1,4 +1,4 @@
-name: Android Studio VM (Browser noVNC)
+name: Stable Linux VM with noVNC
 
 on:
   workflow_dispatch:
@@ -10,27 +10,30 @@ jobs:
 
     steps:
     - name: Update system
-      run: sudo apt update
+      run: sudo apt update && sudo apt upgrade -y
 
-    - name: Install desktop, VNC, noVNC
+    - name: Install desktop and VNC
       run: |
         sudo apt install -y xfce4 xfce4-goodies tightvncserver dbus-x11 git websockify
+
+    - name: Setup VNC server
+      run: |
+        mkdir -p ~/.vnc
+        echo -e "password\npassword\nn" | vncpasswd
+        cat << 'EOF' > ~/.vnc/xstartup
+        #!/bin/sh
+        unset SESSION_MANAGER
+        unset DBUS_SESSION_BUS_ADDRESS
+        exec startxfce4 &
+        EOF
+        chmod +x ~/.vnc/xstartup
+        vncserver -kill :1 || true
+        vncserver -localhost no :1
+
+    - name: Install noVNC
+      run: |
         git clone https://github.com/novnc/noVNC.git
         git clone https://github.com/novnc/websockify.git
-
-   - name: Setup VNC correctly
-       run: |
-          mkdir -p ~/.vnc
-          echo -e "password\npassword\nn" | vncpasswd
-          cat << 'EOF' > ~/.vnc/xstartup
-          #!/bin/sh
-          unset SESSION_MANAGER
-          unset DBUS_SESSION_BUS_ADDRESS
-          exec startxfce4 &
-          EOF
-          chmod +x ~/.vnc/xstartup
-          vncserver -kill :1 || true
-          vncserver -localhost no :1
 
     - name: Start noVNC
       run: |
@@ -46,4 +49,3 @@ jobs:
 
     - name: Expose noVNC via ngrok
       run: ngrok http 6080
-
