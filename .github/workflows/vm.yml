@@ -1,0 +1,31 @@
+name: Linux VM with GUI
+
+on:
+  workflow_dispatch:
+
+jobs:
+  vm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+    - name: Update system
+      run: sudo apt update
+
+    - name: Install desktop + VNC
+      run: |
+        sudo apt install -y xfce4 xfce4-goodies tightvncserver
+        vncserver
+
+    - name: Install ngrok
+      run: |
+        wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz
+        tar -xvzf ngrok-v3-stable-linux-amd64.tgz
+        sudo mv ngrok /usr/local/bin
+        ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+
+    - name: Start VNC server
+      run: vncserver :1
+
+    - name: Expose VNC via ngrok
+      run: ngrok tcp 5901
