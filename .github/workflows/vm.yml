@@ -18,19 +18,24 @@ jobs:
         git clone https://github.com/novnc/noVNC.git
         git clone https://github.com/novnc/websockify.git
 
-    - name: Setup VNC server
-      run: |
-        mkdir -p ~/.vnc
-        echo -e "password\npassword\nn" | vncpasswd
-        echo '#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4 &' > ~/.vnc/xstartup
-        chmod +x ~/.vnc/xstartup
-        vncserver -kill :1 || true
-        vncserver :1
+   - name: Setup VNC correctly
+       run: |
+          mkdir -p ~/.vnc
+          echo -e "password\npassword\nn" | vncpasswd
+          cat << 'EOF' > ~/.vnc/xstartup
+          #!/bin/sh
+          unset SESSION_MANAGER
+          unset DBUS_SESSION_BUS_ADDRESS
+          exec startxfce4 &
+          EOF
+          chmod +x ~/.vnc/xstartup
+          vncserver -kill :1 || true
+          vncserver -localhost no :1
 
     - name: Start noVNC
       run: |
         cd noVNC
-        ./utils/novnc_proxy --vnc localhost:5901 --listen 6080 &
+        ./utils/novnc_proxy --vnc 0.0.0.0:5901 --listen 6080 &
 
     - name: Install ngrok
       run: |
@@ -41,18 +46,4 @@ jobs:
 
     - name: Expose noVNC via ngrok
       run: ngrok http 6080
-
-    - name: Install Java
-      run: sudo apt install -y openjdk-17-jdk
-
-    - name: Install Android Studio
-      run: |
-        wget https://redirector.gvt1.com/edgedl/android/studio/ide-zips/2024.1.1.12/android-studio-2024.1.1.12-linux.tar.gz
-        tar -xvzf android-studio-*-linux.tar.gz
-        sudo mv android-studio /opt/android-studio
-
-    - name: Start Android Studio
-      run: |
-        export DISPLAY=:1
-        /opt/android-studio/bin/studio.sh &
 
