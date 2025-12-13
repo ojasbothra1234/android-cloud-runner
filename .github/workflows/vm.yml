@@ -1,4 +1,4 @@
-name: Linux VM with GUI
+name: Android Studio VM (Browser noVNC)
 
 on:
   workflow_dispatch:
@@ -12,10 +12,39 @@ jobs:
     - name: Update system
       run: sudo apt update
 
-    - name: Install desktop + VNC
+    - name: Install desktop, VNC, noVNC
       run: |
-        sudo apt install -y xfce4 xfce4-goodies tightvncserver
-        vncserver
+        sudo apt install -y xfce4 xfce4-goodies tightvncserver dbus-x11 git websockify
+        git clone https://github.com/novnc/noVNC.git
+        git clone https://github.com/novnc/websockify.git
+
+    - name: Setup VNC server
+      run: |
+        mkdir -p ~/.vnc
+        echo -e "password\npassword\nn" | vncpasswd
+        echo '#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4 &' > ~/.vnc/xstartup
+        chmod +x ~/.vnc/xstartup
+        vncserver -kill :1 || true
+        vncserver :1
+
+    - name: Install Java
+      run: sudo apt install -y openjdk-17-jdk
+
+    - name: Install Android Studio
+      run: |
+        wget https://redirector.gvt1.com/edgedl/android/studio/ide-zips/2024.1.1.12/android-studio-2024.1.1.12-linux.tar.gz
+        tar -xvzf android-studio-*-linux.tar.gz
+        sudo mv android-studio /opt/android-studio
+
+    - name: Start Android Studio
+      run: |
+        export DISPLAY=:1
+        /opt/android-studio/bin/studio.sh &
+
+    - name: Start noVNC
+      run: |
+        cd noVNC
+        ./utils/novnc_proxy --vnc localhost:5901 --listen 6080 &
 
     - name: Install ngrok
       run: |
@@ -24,8 +53,5 @@ jobs:
         sudo mv ngrok /usr/local/bin
         ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: Start VNC server
-      run: vncserver :1
-
-    - name: Expose VNC via ngrok
-      run: ngrok tcp 5901
+    - name: Expose noVNC via ngrok
+      run: ngrok http 6080
