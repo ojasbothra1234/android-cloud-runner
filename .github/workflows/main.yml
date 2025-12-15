@@ -1,0 +1,68 @@
+name: Set up RDP with Ngrok and Guacamole
+
+on: [push, workflow_dispatch]
+
+jobs:
+  setup-rdp:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - name: Download Ngrok
+      run: Invoke-WebRequest https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+
+    - name: Extract Ngrok
+      run: Expand-Archive ngrok.zip
+
+    - name: Authenticate Ngrok
+      run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+
+    - name: Enable Remote Desktop
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+    - name: Start Ngrok Tunnel
+      run: Start-Process .\ngrok\ngrok.exe -ArgumentList "tcp 3389" -NoNewWindow
+
+    - name: Get Ngrok URL
+      run: |
+        $ngrokUrl = (.\ngrok\ngrok.exe url tcp 3389).Trim()
+        echo "RDP URL: $ngrokUrl"
+        echo "RDP_URL=$ngrokUrl" >> $GITHUB_ENV
+
+    - name: Output RDP Connection Details
+      run: echo "Connect to RDP using the following details: Username: runneradmin, Password: P@ssw0rd, RDP URL: ${{ env.RDP_URL }}"
+
+    - name: Set up Guacamole
+      run: |
+        Invoke-WebRequest -Uri https://apache.org/dyn/closer.cgi?action=download&filename=guacamole/1.4.0/guacamole-1.4.0.war -OutFile guacamole.war
+        Start-Process tomcat9.exe -ArgumentList "/start" -NoNewWindow
+        Copy-Item -Path guacamole.war -Destination "C:\path\to\tomcat\webapps\guacamole.war"
+
+    - name: Configure Guacamole
+      run: |
+        $guacamoleProperties = @{
+          "guacd-hostname" = "localhost"
+          "guacd-port" = "4822"
+          "mysql-hostname" = "localhost"
+          "mysql-port" = "3306"
+          "mysql-database" = "guacamole_db"
+          "mysql-user" = "guacamole_user"
+          "mysql-password" = "your_password"
+        }
+        $guacamoleProperties | ForEach-Object {
+          New-Item -Path "C:\path\to\tomcat\conf\Catalina\localhost\guacamole.xml" -Force
+          Add-Content -Path "C:\path\to\tomcat\conf\Catalina\localhost\guacamole.xml" -Value ("<Context docBase='guacamole' path='/guacamole'/>")
+          Add-Content -Path "C:\path\to\tomcat\conf\Catalina\localhost\guacamole.xml" -Value ("<Resource name='jdbc/guacamole-db' auth='Container' type='javax.sql.DataSource' maxActive='20' maxIdle='10' maxWait='10000' username='guacamole_user' password='your_password' driverClassName='com.mysql.cj.jdbc.Driver' url='jdbc:mysql://localhost:3306/guacamole_db'/>")
+        }
+
+    - name: Start Guacamole
+      run: Start-Process tomcat9.exe -ArgumentList "/start" -NoNewWindow
+
+    - name: Access Guacamole
+      run: echo "Access Guacamole at http://your-server-ip:8080/guacamole/"
